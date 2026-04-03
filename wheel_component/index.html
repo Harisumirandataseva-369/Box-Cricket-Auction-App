@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.1.0/chartjs-plugin-datalabels.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin:0; padding:10px 0;
+      background:transparent;
+      display:flex; flex-direction:column;
+      align-items:center; font-family:'Segoe UI',Arial,sans-serif;
+    }
+    .wheel-wrapper {
+      position:relative; width:360px; height:360px;
+    }
+    #wheelCanvas { border-radius:50%; box-shadow:0 0 30px rgba(0,0,0,0.3); }
+    .wheel-ring {
+      position:absolute; top:-8px; left:-8px;
+      width:376px; height:376px; border-radius:50%;
+      border: 8px solid #2c3e50;
+      box-shadow: 0 0 0 3px #e74c3c, 0 0 20px rgba(231,76,60,0.4);
+      pointer-events:none;
+    }
+    .pointer {
+      position:absolute; top:-22px; left:50%;
+      transform:translateX(-50%);
+      width:0; height:0;
+      border-left:16px solid transparent;
+      border-right:16px solid transparent;
+      border-top:36px solid #e74c3c;
+      filter:drop-shadow(0 3px 6px rgba(0,0,0,.6));
+      z-index:10;
+    }
+    .hub {
+      position:absolute;
+      top:50%; left:50%;
+      transform:translate(-50%,-50%);
+      width:40px; height:40px; border-radius:50%;
+      background:radial-gradient(circle, #fff 40%, #ddd 100%);
+      border:3px solid #2c3e50;
+      box-shadow:0 2px 8px rgba(0,0,0,.4);
+      z-index:5; pointer-events:none;
+    }
+    #spinBtn {
+      margin-top:22px;
+      padding:14px 48px;
+      font-size:18px; font-weight:800; letter-spacing:2px;
+      background:linear-gradient(135deg, #00ffb3, #00b3ff);
+      color:#0d1b2a; border:none; border-radius:50px;
+      cursor:pointer;
+      box-shadow:0 5px 20px rgba(0,255,179,.5);
+      transition:transform .3s, box-shadow .3s;
+      text-transform:uppercase;
+    }
+    #spinBtn:hover  { transform:scale(1.06); box-shadow:0 8px 30px rgba(0,255,179,.8); }
+    #spinBtn:active { transform:scale(0.96); }
+    #spinBtn:disabled { background: #555; box-shadow: none; color: #888; cursor:not-allowed; transform:none; }
+    #result {
+      margin-top:14px; font-size:22px; font-weight:800;
+      color:#2ecc71; min-height:36px; text-align:center;
+      text-shadow:0 1px 4px rgba(0,0,0,.2);
+      animation: fadeIn .5s ease;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  </style>
+</head>
+<body>
+  <div class="wheel-wrapper">
+    <div class="wheel-ring"></div>
+    <div class="pointer"></div>
+    <canvas id="wheelCanvas" width="360" height="360"></canvas>
+    <div class="hub"></div>
+  </div>
+  <button id="spinBtn">🎡 &nbsp;SPIN!</button>
+  <div id="result"></div>
+  
+  <script>
+    // Communication logic for Streamlit
+    function sendMessageToStreamlitClient(type, data) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: type,
+        ...data
+      }, "*");
+    }
+
+    function init() {
+      sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});
+    }
+    
+    function setFrameHeight(height) {
+      sendMessageToStreamlitClient("streamlit:setFrameHeight", {height: height});
+    }
+
+    function sendDataToPython(data) {
+      sendMessageToStreamlitClient("streamlit:setComponentValue", data);
+    }
+    
+    let isInitialized = false;
+    let wheelChart = null;
+    let teamNames = [];
+    let numTeams = 0;
+    let preCalculatedWinner = 0;
+    let isSpinning = false;
+    let currentRotation = 0;
+
+    window.addEventListener("message", function(event) {
+      if (event.data.type === "streamlit:render") {
+        if (!isInitialized) {
+            isInitialized = true;
+            const args = event.data.args;
+            teamNames = args.team_names;
+            const teamColors = args.wheel_colors;
+            preCalculatedWinner = args.winner_index;
+            numTeams = teamNames.length;
+            
+            const ctx = document.getElementById('wheelCanvas').getContext('2d');
+            Chart.register(ChartDataLabels);
+
+            wheelChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: teamNames,
+                datasets: [{
+                data: new Array(numTeams).fill(1),
+                backgroundColor: teamColors,
+                borderColor: '#fff',
+                borderWidth: 3,
+                }]
+            },
+            options: {
+                responsive: false,
+                animation: { duration: 0 },
+                plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false },
+                datalabels: {
+                    color: '#fff',
+                    font: { size: numTeams > 6 ? 10 : 13, weight: 'bold' },
+                    formatter: function(value, context) {
+                        return teamNames[context.dataIndex];
+                    },
+                    textAlign: 'center',
+                }
+                }
+            }
+            });
+
+            document.getElementById('spinBtn').addEventListener('click', spinWheel);
+            setFrameHeight(550);
+        }
+      }
+    });
+
+    function spinWheel() {
+      if (isSpinning) return;
+      isSpinning = true;
+      const btn = document.getElementById('spinBtn');
+      btn.disabled = true;
+      document.getElementById('result').textContent = '';
+
+      const winnerIndex = preCalculatedWinner;
+      const sliceDeg    = 360 / numTeams;
+      const targetAngle = 360 - (winnerIndex * sliceDeg + sliceDeg / 2);
+      const fullSpins   = (6 + Math.floor(Math.random() * 4)) * 360;
+      const finalAngle  = fullSpins + ((targetAngle - currentRotation % 360) + 360) % 360;
+
+      const duration  = 4500;
+      const startTime = performance.now();
+      const startRot  = currentRotation;
+
+      const easeOut = t => 1 - Math.pow(1 - t, 4);
+
+      function animate(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        currentRotation = startRot + finalAngle * easeOut(progress);
+        wheelChart.options.rotation = currentRotation % 360;
+        wheelChart.update('none');
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          isSpinning = false;
+          // Keep disabled to prevent double spin for same player
+          btn.disabled = true; 
+          document.getElementById('result').textContent = '🏆 ' + teamNames[winnerIndex] + '!';
+          
+          // SEND THE WINNING TEAM TO PYTHON
+          sendDataToPython({value: teamNames[winnerIndex]});
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    init();
+  </script>
+</body>
+</html>

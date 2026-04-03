@@ -1,0 +1,11 @@
+CCID,STATUS,PI,AMOUNT,NAME,MOBILE,EMAIL,Ref Name,DOB,Attend Before,Interest,Date,URL
+CC001,Active,001,5000,Rajesh Kumar,+91-9876543210,rajesh@email.com,Ref1,1990-05-15,Yes,Cricket,2024-01-15,
+CC002,Active,002,5500,Amit Singh,+91-9876543211,amit@email.com,Ref2,1992-08-22,Yes,Cricket,2024-01-15,
+CC003,Active,003,6000,Vikram Patel,+91-9876543212,vikram@email.com,Ref3,1988-03-10,Yes,Cricket,2024-01-15,
+CC004,Active,004,5200,Deepak Sharma,+91-9876543213,deepak@email.com,Ref4,1991-12-05,Yes,Cricket,2024-01-15,
+CC005,Active,005,5800,Rohit Verma,+91-9876543214,rohit@email.com,Ref5,1989-07-18,Yes,Cricket,2024-01-15,
+CC006,Active,006,6200,Sanjay Rao,+91-9876543215,sanjay@email.com,Ref6,1987-11-25,Yes,Cricket,2024-01-15,
+CC007,Active,007,5400,Arjun Nair,+91-9876543216,arjun@email.com,Ref7,1993-02-14,Yes,Cricket,2024-01-15,
+CC008,Active,008,5600,Pradeep Kumar,+91-9876543217,pradeep@email.com,Ref8,1990-09-30,Yes,Cricket,2024-01-15,
+CC009,Active,009,6100,Manish Gupta,+91-9876543218,manish@email.com,Ref9,1988-06-20,Yes,Cricket,2024-01-15,
+CC010,Active,010,5300,Nikhil Singh,+91-9876543219,nikhil@email.com,Ref10,1992-04-08,Yes,Cricket,2024-01-15,
