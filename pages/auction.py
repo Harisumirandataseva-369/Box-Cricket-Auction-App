@@ -139,7 +139,7 @@ def __show_dialog_content(selected_player, current_team, team_color, sb, turn_ke
     
     # Larger, somewhat squarish player image for the popup
     if p_img and str(p_img).strip():
-        img_html = f'<img src="{p_img}" style="width:220px; height:220px; border-radius:15px; border: 4px solid {team_color}; object-fit:cover; margin-bottom:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); display:block; margin: 0 auto;">'
+        img_html = f'<img src="{p_img}" style="width:220px; height:220px; border-radius:15px; border: 4px solid {team_color}; object-fit:contain; background:#fff; margin-bottom:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); display:block; margin: 0 auto;">'
     else:
         img_html = _avatar_html(selected_player["NAME"], team_color, size=220)
     
@@ -213,7 +213,7 @@ def _render_team_spotlight(team: dict, color: str):
     if image_url and str(image_url).strip():
         # Using a wider, more visible rounded rectangle instead of a circle
         avatar_html = f'''<div style="width:100%; height:320px; border-radius:12px; margin: 0 auto 15px auto; overflow:hidden; border: 4px solid {color}; box-shadow: 0 6px 18px rgba(0,0,0,0.3); background:#fff; display:flex; align-items:center; justify-content:center;">
-<img src="{image_url}" style="width:100%; height:100%; object-fit:cover; object-position: top;">
+<img src="{image_url}" style="width:100%; height:100%; object-fit:contain; object-position: center;">
 </div>'''
     else:
         # Fallback to initials but keeping the same wider rectangular shape
@@ -329,7 +329,8 @@ def _render_team_rosters(teams: list, allocations: dict, all_players: list):
                 # Extract this specific team's full data for Excel
                 t_master_players = [m for m in master_list if m["Team"] == tn]
                 if t_master_players:
-                    df_team_full = pd.DataFrame(t_master_players).drop(columns=["Team", "Captain"], errors="ignore")
+                    df_team_full = pd.DataFrame(t_master_players)[["Player Name", "Phone"]]
+                    df_team_full.rename(columns={"Phone": "Number"}, inplace=True)
                     b_team_data = generate_excel(df_team_full, tn[:31])
                     with col_dl:
                         st.download_button(
@@ -341,11 +342,10 @@ def _render_team_rosters(teams: list, allocations: dict, all_players: list):
                             use_container_width=True
                         )
 
-                # Show simplified view on the UI
-                df_ui = pd.DataFrame(players)[["player_name", "player_email", "allocated_at"]]
-                df_ui.columns = ["Player", "Email", "Allocated At"]
-                df_ui["Allocated At"] = pd.to_datetime(df_ui["Allocated At"]).dt.strftime("%H:%M:%S")
-                st.dataframe(df_ui, use_container_width=True, hide_index=True)
+                    # Show simplified view on the UI
+                    df_ui = pd.DataFrame(t_master_players)[["Player Name", "Phone"]]
+                    df_ui.rename(columns={"Player Name": "Player", "Phone": "Mobile Number"}, inplace=True)
+                    st.dataframe(df_ui, use_container_width=True, hide_index=True)
             else:
                 st.caption("No players yet.")
 
