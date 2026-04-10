@@ -99,38 +99,46 @@ def _view_teams_tab():
     alt_color = "#a03c20" if st.session_state.theme_mode == "Light" else "#00b3ff"
 
     st.markdown(f"<h3 style='color: {alt_color}; margin-top: 10px;'>📋 Registered Teams</h3>", unsafe_allow_html=True)
+    
+    try:
+        players_resp = supabase.table("maintable").select("NAME, URL").execute()
+        player_names = sorted(list({p["NAME"] for p in (players_resp.data or []) if p.get("NAME")}))
+    except:
+        player_names = []
+
     try:
         teams = supabase.table("teams").select("*").execute()
         if teams.data:
-            # Header
-            col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-            with col1: st.markdown("**Team Name**")
-            with col2: st.markdown("**Captain Name**")
-            with col3: st.markdown("**Created At**")
-            with col4: st.markdown("**Action**")
-            st.markdown("---")
-            
             for team in teams.data:
-                c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
-                with c1: st.write(team.get("team_name", ""))
-                with c2: st.write(team.get("captain_name", ""))
-                
-                created_str = team.get("created_at", "")
-                if created_str:
-                    try:
-                        created_str = datetime.fromisoformat(created_str.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
-                    except:
-                        pass
-                with c3: st.write(created_str)
-                
-                with c4:
-                    if st.button("🗑️ Delete", key=f"del_team_{team.get('team_name', '')}", use_container_width=True):
-                        try:
-                            supabase.table("teams").delete().eq("team_name", team.get("team_name")).execute()
-                            st.success(f"Team '{team.get('team_name')}' deleted!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Failed to delete team: {e}")
+                with st.expander(f"🏅 {team.get('team_name')} (Captain: {team.get('captain_name')})"):
+                    t_name_new = st.text_input("Team Name", value=team.get("team_name"), key=f"edit_tname_{team.get('team_name')}")
+                    
+                    cap_index = player_names.index(team.get("captain_name")) if team.get("captain_name") in player_names else None
+                    if player_names:
+                        c_name_new = st.selectbox("Captain Name", options=player_names, index=cap_index, key=f"edit_cname_{team.get('team_name')}")
+                    else:
+                        c_name_new = st.text_input("Captain Name", value=team.get("captain_name"), key=f"edit_cname_{team.get('team_name')}")
+                    
+                    col_save, col_del = st.columns([1, 1])
+                    with col_save:
+                        if st.button("💾 Save Changes", key=f"save_team_{team.get('team_name')}", use_container_width=True):
+                            try:
+                                supabase.table("teams").update({
+                                    "team_name": t_name_new,
+                                    "captain_name": c_name_new
+                                }).eq("team_name", team.get("team_name")).execute()
+                                st.success("Changes saved!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error saving: {e}")
+                    with col_del:
+                        if st.button("🗑️ Delete Team", key=f"del_team_{team.get('team_name')}", use_container_width=True):
+                            try:
+                                supabase.table("teams").delete().eq("team_name", team.get("team_name")).execute()
+                                st.success("Team deleted!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to delete team: {e}")
         else:
             st.info("No teams added yet!")
     except Exception as e:

@@ -137,10 +137,13 @@
                 legend: { display: false },
                 tooltip: { enabled: false },
                 datalabels: {
+                    display: function(context) { return numTeams <= 40; },
                     color: '#fff',
-                    font: { size: numTeams > 6 ? 10 : 13, weight: 'bold' },
+                    font: { size: numTeams > 20 ? 8 : (numTeams > 6 ? 10 : 13), weight: 'bold' },
                     formatter: function(value, context) {
-                        return teamNames[context.dataIndex];
+                        // Truncate player name if it's too long and there are many slice
+                        let name = teamNames[context.dataIndex];
+                        return (numTeams > 15 && name.length > 10) ? name.substring(0,8) + '..' : name;
                     },
                     textAlign: 'center',
                 }

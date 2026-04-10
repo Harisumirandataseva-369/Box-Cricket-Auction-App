@@ -9,3 +9,4 @@ plotly==5.17.0
 requests==2.31.0
 setuptools>=65
 wheel
+openpyxl>=3.1.0

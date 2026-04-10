@@ -77,31 +77,239 @@ def _get_current_team_turn(teams: list, allocations: dict) -> dict:
 
 
 # ─────────────────────────────────────────────
+#  DIALOG HELPER & CELEBRATION
+# ─────────────────────────────────────────────
+
+def _render_celebration():
+    outcomes = [
+        ("IT'S A SIX! 🚀", "🏏💥", "#e74c3c"), 
+        ("SMASHED FOR FOUR!", "💨4️⃣", "#3498db"),
+        ("HOWZAT! OUT!", "☝️😲", "#e67e22"),
+        ("CLEAN BOWLED!", "🎯💥", "#2ecc71"),
+        ("WHAT A CATCH!", "🤲🥎", "#9b59b6"),
+        ("NOT OUT!", "🙅‍♂️😎", "#f1c40f")
+    ]
+    title, emoji, color = random.choice(outcomes)
+    
+    css = f"""
+    <style>
+    @keyframes epicBounceDrop {{
+        0% {{ transform: translate(-50%, -150vh) scale(0.5) rotate(-15deg); opacity: 0; }}
+        20% {{ transform: translate(-50%, -50%) scale(1.1) rotate(5deg); opacity: 1; }}
+        30% {{ transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }}
+        75% {{ transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }}
+        100% {{ transform: translate(-50%, 150vh) scale(0.8) rotate(15deg); opacity: 0; }}
+    }}
+    .single-funny-celeb {{
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        background: #ffffff;
+        border: 8px solid {color};
+        border-radius: 40px;
+        padding: 50px 80px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+        z-index: 9999999;
+        text-align: center;
+        pointer-events: none;
+        animation: epicBounceDrop 2.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }}
+    .single-funny-celeb h1 {{ font-size: 70px; margin: 0; color: {color}; text-transform: uppercase; font-family: 'Impact', sans-serif; text-shadow: 2px 2px 0px rgba(0,0,0,0.2); line-height: 1.1; }}
+    .single-funny-celeb p {{ font-size: 160px; margin: 20px 0 0 0; line-height: 1; animation: wobble 1s infinite alternate; }}
+    @keyframes wobble {{
+        0% {{ transform: scale(1); }}
+        100% {{ transform: scale(1.1); }}
+    }}
+    </style>
+    """
+    html = f"""
+    <div class="single-funny-celeb">
+        <h1>{title}</h1>
+        <p>{emoji}</p>
+    </div>
+    """
+    st.markdown(css + html, unsafe_allow_html=True)
+
+def __show_dialog_content(selected_player, current_team, team_color, sb, turn_key):
+    p_img = selected_player.get("URL")
+    
+    # Larger, somewhat squarish player image for the popup
+    if p_img and str(p_img).strip():
+        img_html = f'<img src="{p_img}" style="width:220px; height:220px; border-radius:15px; border: 4px solid {team_color}; object-fit:cover; margin-bottom:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); display:block; margin: 0 auto;">'
+    else:
+        img_html = _avatar_html(selected_player["NAME"], team_color, size=220)
+    
+    anim_css = """
+    <style>
+    @keyframes popIn { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes swing { 0% { transform: rotate(-30deg); } 50% { transform: rotate(50deg); } 100% { transform: rotate(-30deg); } }
+    @keyframes fly { 0% { transform: translate(10px, 0); } 50% { transform: translate(-30px, -50px); } 100% { transform: translate(10px, 0); } }
+    .anim-container { text-align: center; font-size: 60px; margin-bottom: -20px; }
+    .bat { display: inline-block; animation: swing 1.2s infinite ease-in-out; transform-origin: bottom center; }
+    .ball { display: inline-block; animation: fly 1.2s infinite ease-in-out; }
+    </style>
+    """
+    
+    st.markdown(anim_css + f"""
+    <div style='animation: popIn 0.6s ease-out; text-align:center;'>
+        <div class="anim-container">
+            <span class="bat">🏏</span><span class="ball">🔴</span>
+        </div>
+        <br>
+        {img_html}
+        <h2 style='margin-bottom:0; font-size:32px;'>{selected_player['NAME']}</h2>
+        <p style='margin:10px 0 25px 0; font-size: 22px;'>Assigned to <b style='color:{team_color}; font-size:26px;'>{current_team['team_name']}</b></p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("❌ Reject & Re-spin", use_container_width=True, key="btn_reject_dialog"):
+            if turn_key in st.session_state.get("wheel_winner", {}):
+                del st.session_state.wheel_winner[turn_key]
+            st.session_state.spin_attempts = st.session_state.get("spin_attempts", 0) + 1
+            st.rerun()
+
+    with col2:
+        if st.button("✅ Confirm & Next Team", use_container_width=True, key="btn_confirm_dialog", type="primary"):
+            try:
+                sb.table("allocations").insert({
+                    "player_name":  selected_player["NAME"],
+                    "player_ccid":  selected_player["CCID"],
+                    "player_email": selected_player.get("EMAIL", ""),
+                    "team_name":    current_team["team_name"],
+                    "captain_name": current_team["captain_name"],
+                    "allocated_at": datetime.now().isoformat()
+                }).execute()
+                st.session_state.show_celebration = True
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error saving allocation: {e}")
+
+if hasattr(st, "dialog"):
+    show_winner_dialog = st.dialog("🎉 Player Selected!")(__show_dialog_content)
+elif hasattr(st, "experimental_dialog"):
+    show_winner_dialog = st.experimental_dialog("🎉 Player Selected!")(__show_dialog_content)
+else:
+    def show_winner_dialog(*args, **kwargs):
+        with st.container():
+            st.markdown("---")
+            st.markdown("### 🎉 Player Selected!")
+            __show_dialog_content(*args, **kwargs)
+            st.markdown("---")
+
+# ─────────────────────────────────────────────
 #  SUB-SECTIONS
 # ─────────────────────────────────────────────
 
-def _render_player_spotlight(player: dict, team_turn: dict, color: str):
-    """Left panel: current player card."""
+def _render_team_spotlight(team: dict, color: str):
+    """Left panel: current team and captain card."""
 
-    image_url = player.get("URL")
+    image_url = team.get("image_url")
     if image_url and str(image_url).strip():
-        avatar_html = f'''<div style="width:150px; height:150px; border-radius:50%; margin: 0 auto 15px auto; overflow:hidden; border: 4px solid {color}; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background:#fff; display:flex; align-items:center; justify-content:center;">
-<img src="{image_url}" style="width:100%; height:100%; object-fit:cover;">
+        # Using a wider, more visible rounded rectangle instead of a circle
+        avatar_html = f'''<div style="width:100%; height:320px; border-radius:12px; margin: 0 auto 15px auto; overflow:hidden; border: 4px solid {color}; box-shadow: 0 6px 18px rgba(0,0,0,0.3); background:#fff; display:flex; align-items:center; justify-content:center;">
+<img src="{image_url}" style="width:100%; height:100%; object-fit:cover; object-position: top;">
 </div>'''
     else:
-        avatar_html = _avatar_html(player["NAME"], color, size=150)
+        # Fallback to initials but keeping the same wider rectangular shape
+        initials = _get_initials(team["team_name"])
+        avatar_html = f"""<div style="width:100%; height:320px; border-radius:12px; border: 4px solid {color}; background:{color}44; display:flex; align-items:center; justify-content:center; font-size:80px; font-weight:bold; color:{color}; margin: 0 auto 15px auto; box-shadow: 0 6px 18px rgba(0,0,0,0.2);">{initials}</div>"""
 
     txt_color = "#2c3e50" if st.session_state.theme_mode == "Light" else "white"
 
-    st.markdown(f"""<div class="premium-card" style="padding: 40px 20px; text-align:center; border: 2px solid {color}; box-shadow: 0 10px 40px {color}66; margin-bottom: 20px; transition: transform 0.3s; background-color: transparent;">
+    st.markdown(f"""<div class="premium-card" style="padding: 30px 20px; text-align:center; border: 2px solid {color}; box-shadow: 0 10px 40px {color}66; margin-bottom: 20px; transition: transform 0.3s; background-color: transparent; border-radius: 12px;">
 {avatar_html}
-<h2 style="color:{txt_color}; margin:10px 0 0 0; font-size:26px;">{player['NAME']}</h2>
+<h2 style="color:{txt_color}; margin:15px 0 0 0; font-size:32px;">{team['team_name']}</h2>
+<h4 style="color:{color}; margin:8px 0 0 0; font-size:22px;">Captain: {team['captain_name']}</h4>
 </div>""", unsafe_allow_html=True)
 
 
-def _render_team_rosters(teams: list, allocations: dict):
+def _render_team_rosters(teams: list, allocations: dict, all_players: list):
     """Right panel: all teams with their player counts and lists."""
     st.subheader("👥 Team Rosters")
+
+    # Pre-build master list and dictionary for easy access
+    player_dict = {p["CCID"]: p for p in all_players}
+    master_list = []
+    for tn, players in allocations.items():
+        for p in players:
+            ccid = p.get("player_ccid")
+            full_info = player_dict.get(ccid, {})
+            row = {
+                "Team": tn,
+                "Captain": p.get("captain_name"),
+                "Player Name": p.get("player_name"),
+                "Email": full_info.get("EMAIL") or p.get("player_email"),
+                "Phone": full_info.get("MOBILE") or full_info.get("PHONE"),
+                "Attendance": full_info.get("Attend Before"),
+                "Amount": full_info.get("AMOUNT"),
+                "Assigned At": p.get("allocated_at")
+            }
+            for k, v in full_info.items():
+                if k not in ["NAME", "CCID", "EMAIL", "MOBILE", "PHONE", "Attend Before", "AMOUNT", "URL"]: 
+                    row[k] = v
+            master_list.append(row)
+
+    def generate_excel(df_to_write, sheet_title="Sheet1"):
+        import io
+        out = io.BytesIO()
+        with pd.ExcelWriter(out, engine='openpyxl') as writer:
+            df_to_write.to_excel(writer, sheet_name=sheet_title, index=False)
+            ws = writer.sheets[sheet_title]
+            for cell in ws[1]:
+                cell.font = cell.font.copy(bold=True)
+            for col in ws.columns:
+                col_letter = col[0].column_letter
+                ws.column_dimensions[col_letter].width = min(max([len(str(cell.value)) for cell in col if cell.value] + [10]) + 2, 50)
+        return out.getvalue()
+
+    # ── Master Excel Export (All Teams) ──
+    try:
+        if allocations and master_list:
+            import io
+            out = io.BytesIO()
+            with pd.ExcelWriter(out, engine='openpyxl') as writer:
+                # All Allocations
+                df_master = pd.DataFrame(master_list)
+                df_master.to_excel(writer, sheet_name="All Allocations", index=False)
+                ws_master = writer.sheets["All Allocations"]
+                for cell in ws_master[1]:
+                    cell.font = cell.font.copy(bold=True)
+                for col in ws_master.columns:
+                    col_letter = col[0].column_letter
+                    ws_master.column_dimensions[col_letter].width = min(max([len(str(cell.value)) for cell in col if cell.value] + [10]) + 2, 50)
+                
+                # Tab for each team
+                for t in teams:
+                    tn = t["team_name"]
+                    t_players = [m for m in master_list if m["Team"] == tn]
+                    if t_players:
+                        df_t = pd.DataFrame(t_players).drop(columns=["Team", "Captain"], errors="ignore")
+                        sheet_title = tn[:31] # Max len for excel
+                        df_t.to_excel(writer, sheet_name=sheet_title, index=False)
+                        ws = writer.sheets[sheet_title]
+                        for cell in ws[1]:
+                            cell.font = cell.font.copy(bold=True)
+                        for col in ws.columns:
+                            col_letter = col[0].column_letter
+                            ws.column_dimensions[col_letter].width = min(max([len(str(cell.value)) for cell in col if cell.value] + [10]) + 2, 50)
+            
+            b_data = out.getvalue()
+            st.download_button(
+                label="📥 Download ALL Teams Master Sheet",
+                data=b_data,
+                file_name="Tournament_Allocations_Master.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+            st.markdown("<br>", unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Error generating Master Excel: {e}")
 
     for i, team in enumerate(teams):
         color   = COLORS[i % len(COLORS)]
@@ -110,15 +318,34 @@ def _render_team_rosters(teams: list, allocations: dict):
         count   = len(players)
 
         with st.expander(f"{tn}  —  {count} player(s)", expanded=(count > 0)):
-            st.markdown(
-                f"<span style='color:{color}; font-weight:700;'>Captain: {team['captain_name']}</span>",
-                unsafe_allow_html=True
-            )
+            col_cap, col_dl = st.columns([0.65, 0.35])
+            with col_cap:
+                st.markdown(
+                    f"<span style='color:{color}; font-weight:700;'>Captain: {team['captain_name']}</span>",
+                    unsafe_allow_html=True
+                )
+            
             if players:
-                df = pd.DataFrame(players)[["player_name", "player_email", "allocated_at"]]
-                df.columns = ["Player", "Email", "Allocated At"]
-                df["Allocated At"] = pd.to_datetime(df["Allocated At"]).dt.strftime("%H:%M:%S")
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                # Extract this specific team's full data for Excel
+                t_master_players = [m for m in master_list if m["Team"] == tn]
+                if t_master_players:
+                    df_team_full = pd.DataFrame(t_master_players).drop(columns=["Team", "Captain"], errors="ignore")
+                    b_team_data = generate_excel(df_team_full, tn[:31])
+                    with col_dl:
+                        st.download_button(
+                            label="📥 Export Team",
+                            data=b_team_data,
+                            file_name=f"{tn}_Roster.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"dl_team_{tn}",
+                            use_container_width=True
+                        )
+
+                # Show simplified view on the UI
+                df_ui = pd.DataFrame(players)[["player_name", "player_email", "allocated_at"]]
+                df_ui.columns = ["Player", "Email", "Allocated At"]
+                df_ui["Allocated At"] = pd.to_datetime(df_ui["Allocated At"]).dt.strftime("%H:%M:%S")
+                st.dataframe(df_ui, use_container_width=True, hide_index=True)
             else:
                 st.caption("No players yet.")
 
@@ -130,27 +357,54 @@ def _render_team_rosters(teams: list, allocations: dict):
 def auction_page():
     sb = _supabase()
 
+    if st.session_state.pop("show_celebration", False):
+        _render_celebration()
+
     # ── Top bar ──────────────────────────────
     col_tgl1, col_tgl2 = st.columns([0.85, 0.15])
     with col_tgl2:
-        is_light = st.toggle("🌞 Light / 🌙 Dark", value=(st.session_state.theme_mode == "Light"), key="tgl_auc")
+        is_light = st.toggle("🌞 Light / 🌙", value=(st.session_state.theme_mode == "Light"), key="tgl_auc")
         new_theme = "Light" if is_light else "Dark"
         if new_theme != st.session_state.theme_mode:
             st.session_state.theme_mode = new_theme
             st.rerun()
 
-    col_title, col_logout = st.columns([0.85, 0.15])
+    col_title, col_actions = st.columns([0.85, 0.15])
     with col_title:
         st.markdown("<div class='premium-title' style='text-align: left; font-size: 2.2em;'>🏏 Live Auction Arena</div>", unsafe_allow_html=True)
-    with col_logout:
+    with col_actions:
         st.write("")
         if st.button("🚪 Logout", key="auction_logout", use_container_width=True):
             st.session_state.user = None
             st.session_state.user_role = None
             st.query_params.clear()
             st.rerun()
+        if st.button("🔄 Reset Auction", type="secondary", use_container_width=True):
+            st.session_state.show_reset_confirm = True
 
     st.markdown("---")
+
+    if st.session_state.get("show_reset_confirm", False):
+        st.warning("Are you sure you want to delete all allocations and reset the auction?")
+        colY, colN = st.columns(2)
+        if colY.button("Yes, Reset", type="primary"):
+            try:
+                # To guarantee a bulk delete works, we select all IDs and delete them.
+                allocs = sb.table("allocations").select("player_ccid").execute()
+                if allocs.data:
+                    ccids = [r["player_ccid"] for r in allocs.data]
+                    sb.table("allocations").delete().in_("player_ccid", ccids).execute()
+                st.session_state.show_reset_confirm = False
+                if "wheel_winner" in st.session_state:
+                    del st.session_state["wheel_winner"]
+                st.success("Auction Reset! Refreshing...")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error resetting: {e}")
+        if colN.button("Cancel"):
+            st.session_state.show_reset_confirm = False
+            st.rerun()
+
 
     try:
         teams_resp   = sb.table("teams").select("*").execute()
@@ -187,14 +441,14 @@ def auction_page():
 
         if not unallocated:
             st.success("🎉 All players have been allocated! Auction complete.")
-            _render_team_rosters(teams, allocations)
+            _render_team_rosters(teams, allocations, all_players)
             return
 
         # ── Eligible Teams ────────────────
-        eligible_teams = [t for t in teams if len(allocations.get(t["team_name"], [])) < 10]
+        eligible_teams = [t for t in teams if len(allocations.get(t["team_name"], [])) < 9]
         if not eligible_teams:
-            st.success("🎉 All teams have reached their maximum of 11 players! Auction complete.")
-            _render_team_rosters(teams, allocations)
+            st.success("🎉 All teams have reached their maximum of 10 players! Auction complete.")
+            _render_team_rosters(teams, allocations, all_players)
             return
 
         # ── Whose turn ───────────────────────
@@ -202,58 +456,42 @@ def auction_page():
         team_index    = next((i for i, t in enumerate(teams) if t["team_name"] == current_team["team_name"]), 0)
         team_color    = COLORS[team_index % len(COLORS)]
 
-        # Next player is first unallocated
-        current_player = unallocated[0]
-
         # ── Pre-calculate Wheel Winner ────────
         if "wheel_winner" not in st.session_state:
             st.session_state.wheel_winner = {}
-        curr_ccid = current_player["CCID"]
-        if curr_ccid not in st.session_state.wheel_winner:
-            st.session_state.wheel_winner[curr_ccid] = random.choice(eligible_teams)["team_name"]
+        
+        turn_key = f"{current_team['team_name']}_{len(allocations.get(current_team['team_name'], []))}"
+        if turn_key not in st.session_state.wheel_winner:
+            st.session_state.wheel_winner[turn_key] = random.choice(unallocated)["NAME"]
             
-        winning_team_name = st.session_state.wheel_winner[curr_ccid]
-
-
+        winning_player_name = st.session_state.wheel_winner[turn_key]
 
         # ── Main 3-column layout ──────────────
         col_left, col_mid, col_right = st.columns([0.25, 0.45, 0.30])
 
         with col_left:
-            _render_player_spotlight(current_player, current_team, team_color)
+            _render_team_spotlight(current_team, team_color)
 
         with col_mid:
             st.subheader("🎡 Spin the Wheel")
-            team_names   = [t["team_name"] for t in eligible_teams]
-            wheel_colors = [COLORS[next((i for i, t in enumerate(teams) if t["team_name"] == name), 0) % len(COLORS)] for name in team_names]
-            winner_idx   = next(i for i, name in enumerate(team_names) if name == winning_team_name)
+            player_names = [p["NAME"] for p in unallocated]
+            wheel_colors = [COLORS[i % len(COLORS)] for i in range(len(player_names))]
+            winner_idx   = next((i for i, name in enumerate(player_names) if name == winning_player_name), 0)
             
             from pathlib import Path
             component_path = str(Path(__file__).parent.parent / "wheel_component")
             wheel_comp = components.declare_component("wheel_component", path=component_path)
             
-            returned_team = wheel_comp(team_names=team_names, wheel_colors=wheel_colors, winner_index=winner_idx, key="wheel_" + curr_ccid)
+            wheel_key = f"wheel_{turn_key}_{st.session_state.get('spin_attempts', 0)}"
+            returned_player = wheel_comp(team_names=player_names, wheel_colors=wheel_colors, winner_index=winner_idx, key=wheel_key)
             
-            if returned_team:
-                st.success(f"🎉 **{current_player['NAME']}** is going to **{returned_team}**!")
-                if st.button("✅ Assign & Next Player", use_container_width=True):
-                    selected_team = next(t for t in teams if t["team_name"] == returned_team)
-                    try:
-                        sb.table("allocations").insert({
-                            "player_name":  current_player["NAME"],
-                            "player_ccid":  current_player["CCID"],
-                            "player_email": current_player.get("EMAIL", ""),
-                            "team_name":    selected_team["team_name"],
-                            "captain_name": selected_team["captain_name"],
-                            "allocated_at": datetime.now().isoformat()
-                        }).execute()
-                        st.balloons()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error saving allocation: {e}")
+            if returned_player:
+                selected_player = next((p for p in unallocated if p["NAME"] == returned_player), None)
+                if selected_player:
+                    show_winner_dialog(selected_player, current_team, team_color, sb, turn_key)
 
         with col_right:
-            _render_team_rosters(teams, allocations)
+            _render_team_rosters(teams, allocations, all_players)
 
     except Exception as e:
         st.error(f"Error loading auction page: {e}")

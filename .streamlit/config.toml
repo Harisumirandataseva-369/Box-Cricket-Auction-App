@@ -13,3 +13,6 @@ textColor = "#e0e1dd"
 
 # Font family for all text in the app, except code blocks
 font = "sans serif"
+
+[client]
+toolbarMode = "viewer"
