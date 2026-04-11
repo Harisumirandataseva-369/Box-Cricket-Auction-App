@@ -3,6 +3,7 @@ from pages.login import login_page
 from pages.admin import admin_page
 from pages.auction import auction_page
 from pages.captain import captain_page
+from pages.teams import teams_page
 from config import init_supabase
 
 st.set_page_config(page_title="Cricket Auction App", layout="wide")
@@ -41,11 +42,15 @@ def main():
         login_page()
     elif st.session_state.user_role == "admin":
         styles.inject_custom_css(st.session_state.theme_mode, show_sidebar=True)
-        page = st.sidebar.radio("Navigate", ["Dashboard", "Auction"])
+        if "nav_page" not in st.session_state:
+            st.session_state.nav_page = "Auction"
+        page = st.sidebar.radio("Navigate", ["Dashboard", "Auction", "Teams"], key="nav_page")
         if page == "Dashboard":
             admin_page()
-        else:
+        elif page == "Auction":
             auction_page()
+        elif page == "Teams":
+            teams_page()
     elif st.session_state.user_role == "captain":
         styles.inject_custom_css(st.session_state.theme_mode, show_sidebar=False)
         captain_page()

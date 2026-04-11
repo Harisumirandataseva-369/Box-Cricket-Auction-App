@@ -229,125 +229,6 @@ def _render_team_spotlight(team: dict, color: str):
 </div>""", unsafe_allow_html=True)
 
 
-def _render_team_rosters(teams: list, allocations: dict, all_players: list):
-    """Right panel: all teams with their player counts and lists."""
-    st.subheader("👥 Team Rosters")
-
-    # Pre-build master list and dictionary for easy access
-    player_dict = {p["CCID"]: p for p in all_players}
-    master_list = []
-    for tn, players in allocations.items():
-        for p in players:
-            ccid = p.get("player_ccid")
-            full_info = player_dict.get(ccid, {})
-            row = {
-                "Team": tn,
-                "Captain": p.get("captain_name"),
-                "Player Name": p.get("player_name"),
-                "Email": full_info.get("EMAIL") or p.get("player_email"),
-                "Phone": full_info.get("MOBILE") or full_info.get("PHONE"),
-                "Attendance": full_info.get("Attend Before"),
-                "Amount": full_info.get("AMOUNT"),
-                "Assigned At": p.get("allocated_at")
-            }
-            for k, v in full_info.items():
-                if k not in ["NAME", "CCID", "EMAIL", "MOBILE", "PHONE", "Attend Before", "AMOUNT", "URL"]: 
-                    row[k] = v
-            master_list.append(row)
-
-    def generate_excel(df_to_write, sheet_title="Sheet1"):
-        import io
-        out = io.BytesIO()
-        with pd.ExcelWriter(out, engine='openpyxl') as writer:
-            df_to_write.to_excel(writer, sheet_name=sheet_title, index=False)
-            ws = writer.sheets[sheet_title]
-            for cell in ws[1]:
-                cell.font = cell.font.copy(bold=True)
-            for col in ws.columns:
-                col_letter = col[0].column_letter
-                ws.column_dimensions[col_letter].width = min(max([len(str(cell.value)) for cell in col if cell.value] + [10]) + 2, 50)
-        return out.getvalue()
-
-    # ── Master Excel Export (All Teams) ──
-    try:
-        if allocations and master_list:
-            import io
-            out = io.BytesIO()
-            with pd.ExcelWriter(out, engine='openpyxl') as writer:
-                # All Allocations
-                df_master = pd.DataFrame(master_list)
-                df_master.to_excel(writer, sheet_name="All Allocations", index=False)
-                ws_master = writer.sheets["All Allocations"]
-                for cell in ws_master[1]:
-                    cell.font = cell.font.copy(bold=True)
-                for col in ws_master.columns:
-                    col_letter = col[0].column_letter
-                    ws_master.column_dimensions[col_letter].width = min(max([len(str(cell.value)) for cell in col if cell.value] + [10]) + 2, 50)
-                
-                # Tab for each team
-                for t in teams:
-                    tn = t["team_name"]
-                    t_players = [m for m in master_list if m["Team"] == tn]
-                    if t_players:
-                        df_t = pd.DataFrame(t_players).drop(columns=["Team", "Captain"], errors="ignore")
-                        sheet_title = tn[:31] # Max len for excel
-                        df_t.to_excel(writer, sheet_name=sheet_title, index=False)
-                        ws = writer.sheets[sheet_title]
-                        for cell in ws[1]:
-                            cell.font = cell.font.copy(bold=True)
-                        for col in ws.columns:
-                            col_letter = col[0].column_letter
-                            ws.column_dimensions[col_letter].width = min(max([len(str(cell.value)) for cell in col if cell.value] + [10]) + 2, 50)
-            
-            b_data = out.getvalue()
-            st.download_button(
-                label="📥 Download ALL Teams Master Sheet",
-                data=b_data,
-                file_name="Tournament_Allocations_Master.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-            st.markdown("<br>", unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"Error generating Master Excel: {e}")
-
-    for i, team in enumerate(teams):
-        color   = COLORS[i % len(COLORS)]
-        tn      = team["team_name"]
-        players = allocations.get(tn, [])
-        count   = len(players)
-
-        with st.expander(f"{tn}  —  {count} player(s)", expanded=(count > 0)):
-            col_cap, col_dl = st.columns([0.65, 0.35])
-            with col_cap:
-                st.markdown(
-                    f"<span style='color:{color}; font-weight:700;'>Captain: {team['captain_name']}</span>",
-                    unsafe_allow_html=True
-                )
-            
-            if players:
-                # Extract this specific team's full data for Excel
-                t_master_players = [m for m in master_list if m["Team"] == tn]
-                if t_master_players:
-                    df_team_full = pd.DataFrame(t_master_players)[["Player Name", "Phone"]]
-                    df_team_full.rename(columns={"Phone": "Number"}, inplace=True)
-                    b_team_data = generate_excel(df_team_full, tn[:31])
-                    with col_dl:
-                        st.download_button(
-                            label="📥 Export Team",
-                            data=b_team_data,
-                            file_name=f"{tn}_Roster.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key=f"dl_team_{tn}",
-                            use_container_width=True
-                        )
-
-                    # Show simplified view on the UI
-                    df_ui = pd.DataFrame(t_master_players)[["Player Name", "Phone"]]
-                    df_ui.rename(columns={"Player Name": "Player", "Phone": "Mobile Number"}, inplace=True)
-                    st.dataframe(df_ui, use_container_width=True, hide_index=True)
-            else:
-                st.caption("No players yet.")
 
 
 # ─────────────────────────────────────────────
@@ -369,18 +250,25 @@ def auction_page():
             st.session_state.theme_mode = new_theme
             st.rerun()
 
-    col_title, col_actions = st.columns([0.85, 0.15])
+    col_title, col_actions = st.columns([0.55, 0.45])
     with col_title:
         st.markdown("<div class='premium-title' style='text-align: left; font-size: 2.2em;'>🏏 Live Auction Arena</div>", unsafe_allow_html=True)
     with col_actions:
         st.write("")
-        if st.button("🚪 Logout", key="auction_logout", use_container_width=True):
-            st.session_state.user = None
-            st.session_state.user_role = None
-            st.query_params.clear()
-            st.rerun()
-        if st.button("🔄 Reset Auction", type="secondary", use_container_width=True):
-            st.session_state.show_reset_confirm = True
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            def nav_teams():
+                st.session_state.nav_page = "Teams"
+            st.button("👥 Teams Page", type="primary", use_container_width=True, on_click=nav_teams)
+        with b2:
+            if st.button("🚪 Logout", key="auction_logout", use_container_width=True):
+                st.session_state.user = None
+                st.session_state.user_role = None
+                st.query_params.clear()
+                st.rerun()
+        with b3:
+            if st.button("🔄 Reset", type="secondary", use_container_width=True):
+                st.session_state.show_reset_confirm = True
 
     st.markdown("---")
 
@@ -441,14 +329,12 @@ def auction_page():
 
         if not unallocated:
             st.success("🎉 All players have been allocated! Auction complete.")
-            _render_team_rosters(teams, allocations, all_players)
             return
 
         # ── Eligible Teams ────────────────
         eligible_teams = [t for t in teams if len(allocations.get(t["team_name"], [])) < 9]
         if not eligible_teams:
             st.success("🎉 All teams have reached their maximum of 10 players! Auction complete.")
-            _render_team_rosters(teams, allocations, all_players)
             return
 
         # ── Whose turn ───────────────────────
@@ -466,8 +352,8 @@ def auction_page():
             
         winning_player_name = st.session_state.wheel_winner[turn_key]
 
-        # ── Main 3-column layout ──────────────
-        col_left, col_mid, col_right = st.columns([0.25, 0.45, 0.30])
+        # ── Main 2-column layout ──────────────
+        col_left, col_mid = st.columns([0.35, 0.65])
 
         with col_left:
             _render_team_spotlight(current_team, team_color)
@@ -489,9 +375,6 @@ def auction_page():
                 selected_player = next((p for p in unallocated if p["NAME"] == returned_player), None)
                 if selected_player:
                     show_winner_dialog(selected_player, current_team, team_color, sb, turn_key)
-
-        with col_right:
-            _render_team_rosters(teams, allocations, all_players)
 
     except Exception as e:
         st.error(f"Error loading auction page: {e}")
