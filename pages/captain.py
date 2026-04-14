@@ -5,6 +5,7 @@ import time
 def logout():
     st.session_state.user = None
     st.session_state.user_role = None
+    st.query_params.clear()
     st.rerun()
 
 def captain_page():
@@ -37,13 +38,27 @@ def captain_page():
 
         if allocations.data:
             df = pd.DataFrame(allocations.data)
+            
+            ccids = [a["player_ccid"] for a in allocations.data if "player_ccid" in a]
+            players_resp = supabase.table("maintable").select("CCID, MOBILE").in_("CCID", ccids).execute()
+            player_dict = {p["CCID"]: (p.get("MOBILE") ) for p in (players_resp.data or [])}
+
+            if "player_ccid" in df.columns:
+                df["Mobile Number"] = df["player_ccid"].map(player_dict)
+            else:
+                df["Mobile Number"] = ""
+                
+            df.rename(columns={"player_name": "Player Name"}, inplace=True)
+            
             st.markdown(f"""
             <div style='background: rgba(0, 255, 179, 0.1); border: 1px solid rgba(0, 255, 179, 0.3); border-radius: 10px; padding: 15px; margin-bottom: 20px;'>
                 <span style='color: #e0e1dd; font-size: 1.2em;'>Total Players Allocated: </span>
                 <span style='color: #00ffb3; font-weight: bold; font-size: 1.5em;'>{len(df)} ⚡</span>
             </div>
             """, unsafe_allow_html=True)
-            st.dataframe(df[["player_name", "player_email", "allocated_at"]], use_container_width=True)
+            
+            # Show simplified view on the UI with large projector-friendly font, similar to teams page or just dataframe? The user said "only show player name and mobile number"
+            st.dataframe(df[["Player Name", "Mobile Number"]], use_container_width=True, hide_index=True)
         else:
             st.info("No players allocated to your team yet!")
 

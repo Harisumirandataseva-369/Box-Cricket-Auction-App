@@ -107,6 +107,9 @@ def _render_team_rosters(teams: list, allocations: dict, all_players: list):
             tn      = team["team_name"]
             players = allocations.get(tn, [])
             count   = len(players)
+            
+            txt_color = "#2c3e50" if st.session_state.theme_mode == "Light" else "#e0e1dd"
+            border_c  = "#ccc" if st.session_state.theme_mode == "Light" else "#444"
     
             with st.expander(f"{tn}  —  {count}/10", expanded=(count > 0)):
                 st.markdown(
@@ -139,15 +142,16 @@ def _render_team_rosters(teams: list, allocations: dict, all_players: list):
                                 margin-top: 10px;
                             }}
                             .projector-table-{i} th, .projector-table-{i} td {{
-                                border: 1px solid #444;
+                                border: 1px solid {border_c};
                                 padding: 12px;
                                 text-align: left;
                                 font-size: 1.4em;
+                                color: {txt_color};
                             }}
                             .projector-table-{i} th {{
                                 background-color: {color}22;
                                 font-weight: bold;
-                                color: {color};
+                                border-bottom: 3px solid {color};
                             }}
                             .projector-table-{i} td {{
                                 font-weight: 500;

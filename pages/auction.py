@@ -150,11 +150,11 @@ def _render_celebration():
 def __show_dialog_content(selected_player, current_team, team_color, sb, turn_key):
     p_img = selected_player.get("URL")
     
-    # Larger, somewhat squarish player image for the popup
+    # Larger, comparable to captain image
     if p_img and str(p_img).strip():
-        img_html = f'<img src="{p_img}" style="width:220px; height:220px; border-radius:15px; border: 4px solid {team_color}; object-fit:contain; background:#fff; margin-bottom:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); display:block; margin: 0 auto;">'
+        img_html = f'<img src="{p_img}" style="width:320px; height:320px; border-radius:15px; border: 4px solid {team_color}; object-fit:contain; background:#fff; margin-bottom:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); display:block; margin: 0 auto;">'
     else:
-        img_html = _avatar_html(selected_player["NAME"], team_color, size=220)
+        img_html = _avatar_html(selected_player["NAME"], team_color, size=320)
     
     anim_css = """
     <style>
@@ -194,6 +194,7 @@ def __show_dialog_content(selected_player, current_team, team_color, sb, turn_ke
                     "player_name":  selected_player["NAME"],
                     "player_ccid":  selected_player["CCID"],
                     "player_email": selected_player.get("EMAIL", ""),
+                    "player_mobile": selected_player.get("MOBILE", ""),
                     "team_name":    current_team["team_name"],
                     "captain_name": current_team["captain_name"],
                     "allocated_at": datetime.now().isoformat()
