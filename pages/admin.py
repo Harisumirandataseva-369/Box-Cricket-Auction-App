@@ -50,12 +50,15 @@ def _add_team_tab():
     st.markdown("<p style='color: #a0aab2; margin-bottom: 20px;'>Fill in the details below to add a new team and its captain to the tournament.</p>", unsafe_allow_html=True)
     
     try:
-        players_resp = supabase.table("maintable").select("NAME, URL").execute()
+        players_resp = supabase.table("maintable").select("NAME, URL, \"Player Category\"").execute()
         teams_resp = supabase.table("teams").select("captain_name").execute()
         
-        player_urls = {p["NAME"]: p.get("URL", "") for p in (players_resp.data or []) if p.get("NAME")}
+        player_data = players_resp.data or []
+        player_urls = {p["NAME"]: p.get("URL", "") for p in player_data if p.get("NAME")}
         existing_captains = {t["captain_name"] for t in (teams_resp.data or []) if t.get("captain_name")}
-        player_names = sorted(list({p["NAME"] for p in (players_resp.data or []) if p.get("NAME") and p["NAME"] not in existing_captains}))
+        
+        captain_pool = [p for p in player_data if "captain" in str(p.get("Player Category", "")).lower()]
+        player_names = sorted(list({p["NAME"] for p in captain_pool if p.get("NAME") and p["NAME"] not in existing_captains}))
     except Exception as e:
         player_names = []
         player_urls = {}
@@ -101,8 +104,14 @@ def _view_teams_tab():
     st.markdown(f"<h3 style='color: {alt_color}; margin-top: 10px;'>📋 Registered Teams</h3>", unsafe_allow_html=True)
     
     try:
-        players_resp = supabase.table("maintable").select("NAME, URL").execute()
-        player_names = sorted(list({p["NAME"] for p in (players_resp.data or []) if p.get("NAME")}))
+        players_resp = supabase.table("maintable").select("NAME, URL, \"Player Category\"").execute()
+        teams_resp = supabase.table("teams").select("captain_name").execute()
+        
+        player_data = players_resp.data or []
+        existing_captains_curr = {t["captain_name"] for t in (teams_resp.data or []) if t.get("captain_name")}
+        
+        captain_pool = [p for p in player_data if "captain" in str(p.get("Player Category", "")).lower() or p.get("NAME") in existing_captains_curr]
+        player_names = sorted(list({p["NAME"] for p in captain_pool if p.get("NAME")}))
     except:
         player_names = []
 

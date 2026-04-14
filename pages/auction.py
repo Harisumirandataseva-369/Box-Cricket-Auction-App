@@ -57,13 +57,26 @@ def _get_allocated_ccids(allocations: dict) -> set:
     return ccids
 
 
-def _get_current_team_turn(teams: list, allocations: dict) -> dict:
+def _get_current_team_turn(teams: list, allocations: dict, player_dict: dict, auction_type: str) -> dict:
     """
-    Round-robin: the team with the fewest players goes next.
+    Round-robin: the team with the fewest players in the target category goes next.
     Ties broken by original team order (index).
     """
-    counts = {t["team_name"]: len(allocations.get(t["team_name"], [])) for t in teams}
-    min_count = min(counts.values())
+    counts = {}
+    for t in teams:
+        tn = t["team_name"]
+        t_allocs = allocations.get(tn, [])
+        cat_count = 0
+        for p in t_allocs:
+            if p.get("player_ccid") in player_dict:
+                p_cat = str(player_dict[p["player_ccid"]].get("Player Category", "")).lower()
+                if auction_type == "Marquee Players" and "marquee" in p_cat:
+                    cat_count += 1
+                elif auction_type == "Pavilion Players" and "pavilion" in p_cat:
+                    cat_count += 1
+        counts[tn] = cat_count
+        
+    min_count = min(counts.values()) if counts else 0
     for team in teams:
         if counts[team["team_name"]] == min_count:
             return team
@@ -307,38 +320,83 @@ def auction_page():
 
         teams       = teams_resp.data
         all_players = players_resp.data
+        player_dict = {p["CCID"]: p for p in all_players}
+
+        # ── Auction Type Selector ────────────────
+        st.markdown("<h3 style='color: #a0aab2;'>🎯 Select Auction Mode</h3>", unsafe_allow_html=True)
+        auction_type = st.radio(
+            "Auction Type", 
+            ["Marquee Players", "Pavilion Players"], 
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        
+        target_display_name = "Marquee" if auction_type == "Marquee Players" else "Pavilion Player"
+        max_category = 2 if auction_type == "Marquee Players" else 5
+        
+        def is_target_category(p_cat):
+            c_str = str(p_cat).strip().lower()
+            if auction_type == "Marquee Players":
+                return "marquee" in c_str
+            else:
+                return "pavilion" in c_str
 
         # ── Live data ────────────────────────
         allocations     = _get_allocations()
         allocated_ccids = _get_allocated_ccids(allocations)
         captain_names   = {t.get("captain_name") for t in teams if t.get("captain_name")}
         
-        unallocated     = [
+        unallocated_all = [
             p for p in all_players 
             if p["CCID"] not in allocated_ccids and p["NAME"] not in captain_names
         ]
+        
+        unallocated_target = [
+            p for p in unallocated_all
+            if is_target_category(p.get("Player Category", ""))
+        ]
 
         # ── Progress bar ─────────────────────
-        total     = len([p for p in all_players if p["NAME"] not in captain_names])
-        allocated = total - len(unallocated)
+        total_target_in_db = len([p for p in all_players if is_target_category(p.get("Player Category", ""))])
+        allocated_target = total_target_in_db - len(unallocated_target)
+        
         st.markdown(
-            f"**Auction Progress:** {allocated} / {total} players allocated"
+            f"**{auction_type} Progress:** {allocated_target} / {total_target_in_db} players allocated"
         )
-        st.progress(allocated / total if total else 0)
+        st.progress(allocated_target / total_target_in_db if total_target_in_db else 0)
         st.markdown("")
 
-        if not unallocated:
-            st.success("🎉 All players have been allocated! Auction complete.")
-            return
+        if not unallocated_target:
+            st.success(f"🎉 All {target_display_name} players have been allocated!")
+            
+        def get_category_count(team_allocations):
+            count = 0
+            for p in team_allocations:
+                ccid = p.get("player_ccid")
+                if ccid in player_dict and is_target_category(player_dict[ccid].get("Player Category", "")):
+                    count += 1
+            return count
 
         # ── Eligible Teams ────────────────
-        eligible_teams = [t for t in teams if len(allocations.get(t["team_name"], [])) < 9]
+        eligible_teams = [t for t in teams if get_category_count(allocations.get(t["team_name"], [])) < max_category]
+        
         if not eligible_teams:
-            st.success("🎉 All teams have reached their maximum of 10 players! Auction complete.")
+            st.success(f"🎉 All teams have reached their maximum of {max_category} {target_display_name} players!")
+
+        if not unallocated_target or not eligible_teams:
+            st.markdown("---")
+            st.markdown("<h3 style='color: #e74c3c;'>📋 Unsold / Remaining Players</h3>", unsafe_allow_html=True)
+            if unallocated_all:
+                df_unsold = pd.DataFrame(unallocated_all)
+                cols_to_show = ["NAME", "Player Category", "MOBILE", "EMAIL"]
+                cols_available = [c for c in cols_to_show if c in df_unsold.columns]
+                st.dataframe(df_unsold[cols_available], use_container_width=True)
+            else:
+                st.info("No players remaining in the pool!")
             return
 
         # ── Whose turn ───────────────────────
-        current_team  = _get_current_team_turn(eligible_teams, allocations)
+        current_team  = _get_current_team_turn(eligible_teams, allocations, player_dict, auction_type)
         team_index    = next((i for i, t in enumerate(teams) if t["team_name"] == current_team["team_name"]), 0)
         team_color    = COLORS[team_index % len(COLORS)]
 
@@ -346,9 +404,11 @@ def auction_page():
         if "wheel_winner" not in st.session_state:
             st.session_state.wheel_winner = {}
         
-        turn_key = f"{current_team['team_name']}_{len(allocations.get(current_team['team_name'], []))}"
+        cat_count = get_category_count(allocations.get(current_team['team_name'], []))
+        turn_key = f"{auction_type}_{current_team['team_name']}_{cat_count}"
+        
         if turn_key not in st.session_state.wheel_winner:
-            st.session_state.wheel_winner[turn_key] = random.choice(unallocated)["NAME"]
+            st.session_state.wheel_winner[turn_key] = random.choice(unallocated_target)["NAME"]
             
         winning_player_name = st.session_state.wheel_winner[turn_key]
 
@@ -360,7 +420,7 @@ def auction_page():
 
         with col_mid:
             st.subheader("🎡 Spin the Wheel")
-            player_names = [p["NAME"] for p in unallocated]
+            player_names = [p["NAME"] for p in unallocated_target]
             wheel_colors = [COLORS[i % len(COLORS)] for i in range(len(player_names))]
             winner_idx   = next((i for i, name in enumerate(player_names) if name == winning_player_name), 0)
             
@@ -372,7 +432,7 @@ def auction_page():
             returned_player = wheel_comp(team_names=player_names, wheel_colors=wheel_colors, winner_index=winner_idx, key=wheel_key)
             
             if returned_player:
-                selected_player = next((p for p in unallocated if p["NAME"] == returned_player), None)
+                selected_player = next((p for p in unallocated_target if p["NAME"] == returned_player), None)
                 if selected_player:
                     show_winner_dialog(selected_player, current_team, team_color, sb, turn_key)
 

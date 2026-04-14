@@ -130,10 +130,36 @@ def _render_team_rosters(teams: list, allocations: dict, all_players: list):
                             use_container_width=True
                         )
     
-                        # Show simplified view on the UI
-                        df_ui = pd.DataFrame(t_master_players)[["Player Name", "Phone"]]
-                        df_ui.rename(columns={"Player Name": "Player", "Phone": "Mobile Number"}, inplace=True)
-                        st.dataframe(df_ui, use_container_width=True, hide_index=True)
+                        # Show simplified view on the UI with large projector-friendly font
+                        html_table = f"""
+                        <style>
+                            .projector-table-{i} {{
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin-top: 10px;
+                            }}
+                            .projector-table-{i} th, .projector-table-{i} td {{
+                                border: 1px solid #444;
+                                padding: 12px;
+                                text-align: left;
+                                font-size: 1.4em;
+                            }}
+                            .projector-table-{i} th {{
+                                background-color: {color}22;
+                                font-weight: bold;
+                                color: {color};
+                            }}
+                            .projector-table-{i} td {{
+                                font-weight: 500;
+                            }}
+                        </style>
+                        <table class="projector-table-{i}">
+                            <tr><th>Player</th><th>Mobile Number</th></tr>
+                        """
+                        for p in t_master_players:
+                            html_table += f"<tr><td>{p.get('Player Name', '')}</td><td>{p.get('Phone', '')}</td></tr>"
+                        html_table += "</table>"
+                        st.markdown(html_table, unsafe_allow_html=True)
                 else:
                     st.caption("No players yet.")
 
