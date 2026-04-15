@@ -373,6 +373,7 @@ def auction_page():
 
         if not unallocated_target:
             st.success(f"🎉 All {target_display_name} players have been allocated!")
+            return
             
         def get_category_count(team_allocations):
             count = 0
@@ -387,6 +388,7 @@ def auction_page():
         
         if not eligible_teams:
             st.success(f"🎉 All teams have reached their maximum of {max_category} {target_display_name} players!")
+            return
 
 
         # ── Whose turn ───────────────────────
