@@ -68,8 +68,9 @@ def _get_current_team_turn(teams: list, allocations: dict, player_dict: dict, au
         t_allocs = allocations.get(tn, [])
         cat_count = 0
         for p in t_allocs:
-            if p.get("player_ccid") in player_dict:
-                p_cat = str(player_dict[p["player_ccid"]].get("Player Category", "")).lower()
+            ccid_str = str(p.get("player_ccid", ""))
+            if ccid_str in player_dict:
+                p_cat = str(player_dict[ccid_str].get("Player Category", "")).lower()
                 if auction_type == "Marquee Players" and "marquee" in p_cat:
                     cat_count += 1
                 elif auction_type == "Pavilion Players" and "pavilion" in p_cat:
@@ -193,12 +194,15 @@ def __show_dialog_content(selected_player, current_team, team_color, sb, turn_ke
                 sb.table("allocations").insert({
                     "player_name":  selected_player["NAME"],
                     "player_ccid":  selected_player["CCID"],
-                    "player_email": selected_player.get("EMAIL", ""),
-                    "player_mobile": selected_player.get("MOBILE", ""),
                     "team_name":    current_team["team_name"],
                     "captain_name": current_team["captain_name"],
                     "allocated_at": datetime.now().isoformat()
                 }).execute()
+                # Clean up session state and force wheel UI reset
+                if turn_key in st.session_state.get("wheel_winner", {}):
+                    del st.session_state.wheel_winner[turn_key]
+                st.session_state.spin_attempts = st.session_state.get("spin_attempts", 0) + 1
+                
                 st.session_state.show_celebration = True
                 st.rerun()
             except Exception as e:
@@ -373,8 +377,8 @@ def auction_page():
         def get_category_count(team_allocations):
             count = 0
             for p in team_allocations:
-                ccid = p.get("player_ccid")
-                if ccid in player_dict and is_target_category(player_dict[ccid].get("Player Category", "")):
+                ccid_str = str(p.get("player_ccid", ""))
+                if ccid_str in player_dict and is_target_category(player_dict[ccid_str].get("Player Category", "")):
                     count += 1
             return count
 
