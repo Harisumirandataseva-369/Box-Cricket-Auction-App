@@ -388,17 +388,6 @@ def auction_page():
         if not eligible_teams:
             st.success(f"🎉 All teams have reached their maximum of {max_category} {target_display_name} players!")
 
-        if not unallocated_target or not eligible_teams:
-            st.markdown("---")
-            st.markdown("<h3 style='color: #e74c3c;'>📋 Unsold / Remaining Players</h3>", unsafe_allow_html=True)
-            if unallocated_all:
-                df_unsold = pd.DataFrame(unallocated_all)
-                cols_to_show = ["NAME", "Player Category", "MOBILE", "EMAIL"]
-                cols_available = [c for c in cols_to_show if c in df_unsold.columns]
-                st.dataframe(df_unsold[cols_available], use_container_width=True)
-            else:
-                st.info("No players remaining in the pool!")
-            return
 
         # ── Whose turn ───────────────────────
         current_team  = _get_current_team_turn(eligible_teams, allocations, player_dict, auction_type)
